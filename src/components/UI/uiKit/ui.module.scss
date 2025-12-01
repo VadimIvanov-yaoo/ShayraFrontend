@@ -1,0 +1,114 @@
+.flex {
+  display: flex;
+}
+
+.flexColumn {
+  display: flex;
+  flex-direction: column;
+}
+.container {
+  margin-left: auto;
+  margin-right: auto;
+}
+.text {
+  color: #333;
+}
+
+.alignCenter {
+  align-items: center;
+}
+
+.alignEnd{
+  align-items: end;
+}
+
+
+.justifyCenter {
+  justify-content: center;
+}
+
+.justifyBetween {
+  justify-content: space-between;
+}
+
+.justifyAround {
+  justify-content: space-around;
+}
+
+
+.gapSmall {
+  gap: 10px;
+}
+
+.gapMedium {
+  gap: 15px;
+}
+
+.inputWrapper {
+  position: relative;
+  margin: 1rem 0;
+
+}
+.input {
+  width: 100%;
+  padding: 11px 18px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.75rem;
+}
+
+.input:focus {
+  border-color: #1c7ed6;
+}
+
+.label {
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  background: white;
+  padding: 0 4px;
+  color: #999;
+  font-size: 1rem;
+  transition: all 0.2s ease-out;
+  pointer-events: none;
+}
+
+.filled + .label {
+  top: -8px;
+  font-size: 0.8rem;
+  color: #1c7ed6;
+}
+
+.section {
+  height: 100vh;
+  overflow: hidden;
+  flex-shrink: 0;
+  background-size: initial ;
+  background: #2A7B9B;
+  background: linear-gradient(90deg,
+          rgba(42, 123, 155, 0.16) 0%,
+          rgba(47, 131, 153, 0.17) 5%,
+          rgba(50, 136, 152, 0.16) 8%,
+          rgba(54, 143, 150, 0.16) 13%,
+          rgba(56, 147, 149, 0.17) 15%,
+          rgba(67, 166, 143, 0.15) 28%,
+          rgba(72, 174, 141, 0.14) 33%,
+          rgba(87, 199, 133, 0.16) 50%,
+          rgba(121, 204, 122, 0.17) 61%,
+          rgba(158, 210, 109, 0.16) 73%,
+          rgba(167, 211, 106, 0.19) 77%,
+          rgba(182, 213, 101, 0.15) 81%,
+          rgba(201, 216, 95, 0.16) 88%,
+          rgba(214, 218, 91, 0.16) 92%,
+          rgba(229, 220, 86, 0.14) 95%,
+          rgba(237, 221, 83, 0.19) 100%
+  );
+}
+
+
+
+
+
+
+
+

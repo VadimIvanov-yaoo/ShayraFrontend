@@ -1,0 +1,25 @@
+.chat {
+  flex-grow: 1;
+  min-width: 0;
+  z-index: 900;
+}
+
+.chatWrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: calc(100vh - 9%);
+  align-items: center;
+}
+
+@media (min-width: 700px) {
+  .chat {
+    width: 1px;
+  }
+}
+
+@media (max-width: 500px) {
+  .chatWrapper {
+    padding-bottom: 15px;
+  }
+}

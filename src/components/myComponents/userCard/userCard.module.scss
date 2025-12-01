@@ -1,0 +1,20 @@
+.userCard{
+  padding: 4px;
+  cursor: pointer;
+}
+
+.cardContent{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+
+.cardContent:hover{
+  background: rgba(211, 211, 211,0.2);
+}
+
+.userName{
+  font-size: 18px;
+}

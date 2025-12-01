@@ -1,0 +1,13 @@
+.menuBtn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 3000;
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .menuBtn {
+    display: block;
+  }
+}

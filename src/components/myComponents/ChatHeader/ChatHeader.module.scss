@@ -1,0 +1,57 @@
+.userInfoWrapper{
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.chatAvatar{
+  height: 48px;
+  width: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.chatHeader{
+  display: flex;
+  justify-content: space-between;
+  padding: 15px;
+  background: white;
+}
+
+.partnerInfo{
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+}
+
+.partnerName{
+  font-size: 1.12rem;
+  font-weight: 500;
+}
+
+.status{
+  font-size: 0.85rem;
+  margin-top: -3px;
+}
+
+.onlineClass{
+  @extend .status;
+  color: green;
+}
+
+.offlineClass {
+  @extend .status;
+  color: gray;
+}
+
+.backBtn{
+  opacity: 80%;
+  background-color: transparent;
+  border-radius: 50%;
+  padding: 5px;
+}
+
+.backBtn:hover{
+  background: rgba(211, 211, 211,0.2);
+}
+

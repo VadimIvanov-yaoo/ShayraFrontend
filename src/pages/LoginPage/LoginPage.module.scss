@@ -1,0 +1,57 @@
+.wrapper {
+  min-height: 75vh;
+  min-width: 375px;
+}
+
+.logo {
+  height: 220px;
+}
+
+.title {
+  font-size: 2rem;
+}
+
+.subtitle {
+  font-size: 1rem;
+}
+
+.form {
+  width: 100%;
+  max-width: 400px;
+}
+
+@media (max-width: 500px) {
+  .form {
+    width: 100%;
+    max-width: 300px;
+  }
+  .subtitle {
+    font-size: 0.9rem;
+  }
+  .logo {
+    height: 200px;
+  }
+}
+
+.input {
+  width: 100%;
+}
+
+.switchAuth {
+  margin-bottom: 16px;
+}
+
+.link {
+  color: #1c7ed6;
+  cursor: pointer;
+}
+
+.submit {
+  width: 100%;
+  border-radius: 0.4rem;
+}
+
+.error{
+  color: red;
+  font-size: 14px;
+}

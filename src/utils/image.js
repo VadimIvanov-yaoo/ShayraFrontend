@@ -1,0 +1,11 @@
+export const DEFAULT_AVATAR = '/avatars/defaultAvatar.svg'
+export const MAN_AVATAR = '/avatars/man-avatar.svg'
+export const WOMAN_AVATAR = '/avatars/woman-avatar.svg'
+export const KID_AVATAR = '/avatars/kid-avatar.svg'
+export const CHECKED = '/icon/check-check.svg'
+export const NOT_CHECKED = '/icon/check.svg'
+export const LEFT_ARROW = '/icon/arrow-left.svg'
+
+export const HEART = '/icon/heart.svg'
+export const HAND_UP = '/icon/likeHand.svg'
+export const CLOWN = '/icon/clown.svg'
