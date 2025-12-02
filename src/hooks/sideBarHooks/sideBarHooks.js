@@ -72,15 +72,19 @@ export function useSidebarLogic() {
   useEffect(() => {
     if (!socket) return
     const handleNewMessage = (msg) => {
-      if (!msg?.dialogId) return
-      setLastMessage((prev) => [
-        ...prev.filter((m) => m.dialogId !== msg.dialogId),
-        msg,
-      ])
+      if (!msg || !msg.dialogId) return
+      setLastMessage((prev) => {
+        const filtered = prev.filter((m) => m && m.dialogId !== msg.dialogId)
+        return [...filtered, msg]
+      })
     }
+
     socket.on('messageCreated', handleNewMessage)
-    return () => socket.off('messageCreated', handleNewMessage)
-  }, [])
+
+    return () => {
+      socket.off('messageCreated', handleNewMessage)
+    }
+  }, [socket])
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {

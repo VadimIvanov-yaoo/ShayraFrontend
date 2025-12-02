@@ -222,6 +222,8 @@ const Message = observer(
                       item.userId === user.user.id
                         ? user.user.avatarUrl
                         : currentChat.avatarUrl
+
+                    console.log(item.userId)
                     return (
                       <Reactions
                         key={index}
