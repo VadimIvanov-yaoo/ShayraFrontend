@@ -52,10 +52,28 @@ const Message = observer(
       event.preventDefault()
       if (messageRef.current) {
         const rect = messageRef.current.getBoundingClientRect()
-        setMenuPosition({
-          top: rect.top + window.scrollY + 10,
-          left: rect.left + window.scrollX - 160,
-        })
+        const menuWidth = 160
+        const viewportWidth = window.innerWidth
+
+        if (isOwnMessage) {
+          setMenuPosition({
+            top: rect.top + window.scrollY + 10,
+            left: rect.left + window.scrollX - menuWidth,
+          })
+        } else {
+          const leftPosition = rect.right + window.scrollX
+          if (leftPosition + menuWidth > viewportWidth) {
+            setMenuPosition({
+              top: rect.top + window.scrollY + 10,
+              left: rect.left + window.scrollX - menuWidth,
+            })
+          } else {
+            setMenuPosition({
+              top: rect.top + window.scrollY + 10,
+              left: leftPosition + 5,
+            })
+          }
+        }
         setActiveMessageId(id)
       }
     }

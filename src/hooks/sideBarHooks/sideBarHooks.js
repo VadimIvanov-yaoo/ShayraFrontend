@@ -1,7 +1,11 @@
-import { createChat, getInfoUsers } from '../../http/userApi'
+import {
+  createChat,
+  getInfoUsers,
+  getLastedMessage,
+  searchUser,
+} from '../../http/userApi'
 import { Context } from '../../main'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { getLastedMessage, searchUser } from '../../http/userApi'
 import Cookies from 'js-cookie'
 import socket from '../../Websoket/socket'
 import { runInAction } from 'mobx'
@@ -10,13 +14,11 @@ import { DEFAULT_AVATAR } from '../../utils/image'
 export function useCreateChat() {
   const { chat, user } = useContext(Context)
 
-  async function createNewChat(userId2) {
+  const createNewChat = async (userId2) => {
     try {
       const dialog = await createChat(user.user.id, userId2)
-
       runInAction(() => {
-        const exists = chat.chats.some((n) => n.id === dialog.id)
-        if (!exists) {
+        if (!chat.chats.some((c) => c.id === dialog.id)) {
           chat.chats.push(dialog)
           console.log('Успешно создан')
         } else {
@@ -36,6 +38,7 @@ export function useSidebarLogic() {
 
   const sidebarRef = useRef(null)
   const userId2Ref = useRef(null)
+  const intervalRef = useRef(null)
 
   const [runTour, setRunTour] = useState(false)
   const [userSearch, setUserSearch] = useState('')
@@ -45,12 +48,11 @@ export function useSidebarLogic() {
   const [focus, setFocus] = useState(false)
   const [widthBlock, setWidthBlock] = useState(365)
   const [lastMessage, setLastMessage] = useState([])
-  const [userAvatars, setUserAvatars] = useState([])
-  const [userStatus, setUserStatus] = useState([])
+  const [userAvatars, setUserAvatars] = useState({})
+  const [userStatus, setUserStatus] = useState({})
 
   const MAX_WIDTH = 635
   const MIN_WIDTH = 340
-
   const createNewChat = useCreateChat()
 
   const chatIds = useMemo(() => chat.chats.map((c) => c.id), [chat.chats])
@@ -60,50 +62,44 @@ export function useSidebarLogic() {
   }, [chat])
 
   useEffect(() => {
-    if (chat.chats.length > 0) {
-      showLastMessage()
-    }
+    if (chat.chats.length > 0) showLastMessage()
   }, [chat.chats])
 
   useEffect(() => {
-    if (!chatIds.length) return
-    getUserInfo()
+    if (chatIds.length > 0) getUserInfo()
   }, [chatIds])
 
   useEffect(() => {
     if (!socket) return
     const handleNewMessage = (msg) => {
-      if (!msg || !msg.dialogId) return
-      setLastMessage((prev) => {
-        const filtered = prev.filter((m) => m && m.dialogId !== msg.dialogId)
-        return [...filtered, msg]
-      })
+      if (!msg?.dialogId) return
+      setLastMessage((prev) => [
+        ...prev.filter((m) => m.dialogId !== msg.dialogId),
+        msg,
+      ])
     }
-
     socket.on('messageCreated', handleNewMessage)
-
-    return () => {
-      socket.off('messageCreated', handleNewMessage)
-    }
-  }, [socket])
+    return () => socket.off('messageCreated', handleNewMessage)
+  }, [])
 
   useEffect(() => {
-    function showJoyribe() {
-      if (!sidebarRef.current) return
+    const timeoutId = setTimeout(() => {
       const visited = Cookies.get('visited')
       setRunTour(!(visited || user.user?.userName))
-    }
-    const timeoutId = setTimeout(showJoyribe, 400)
+    }, 400)
     return () => clearTimeout(timeoutId)
   }, [user.user?.userName])
 
   useEffect(() => {
-    if (chat.currentChat?.id) {
-      message.loadMessages(chat.currentChat.id, user.user.id)
-      setInterval(() => {
-        message.loadMessages(chat.currentChat?.id, user.user.id)
-      }, 3000)
-    }
+    if (!chat.currentChat?.id) return
+    message.loadMessages(chat.currentChat.id, user.user.id)
+
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    intervalRef.current = setInterval(() => {
+      message.loadMessages(chat.currentChat?.id, user.user.id)
+    }, 3000)
+
+    return () => clearInterval(intervalRef.current)
   }, [chat.currentChat?.id])
 
   async function showLastMessage() {
@@ -117,24 +113,19 @@ export function useSidebarLogic() {
 
   async function getUserInfo() {
     try {
-      const participantIds = chat.chats.map((chatItem) =>
-        chatItem.creatorId === user.user.id
-          ? chatItem.participantId
-          : chatItem.creatorId
+      const participantIds = chat.chats.map((c) =>
+        c.creatorId === user.user.id ? c.participantId : c.creatorId
       )
-
       const data = await getInfoUsers({ chatIds: participantIds })
       const avatarsById = {}
-      const userStatus = {}
-
+      const statusById = {}
       participantIds.forEach((id) => {
         const userData = data.find((u) => u.id === id)
         avatarsById[id] = userData?.avatarUrl || DEFAULT_AVATAR
-        userStatus[id] = userData?.status || null
+        statusById[id] = userData?.status || null
       })
-
       setUserAvatars(avatarsById)
-      setUserStatus(userStatus)
+      setUserStatus(statusById)
     } catch (error) {
       console.error(error)
     }
@@ -143,7 +134,6 @@ export function useSidebarLogic() {
   async function handleUserSearch(e) {
     const value = e.target.value
     setUserSearch(value)
-
     try {
       if (value.trim() && value !== user.user.userName) {
         const data = await searchUser(value)
@@ -165,8 +155,7 @@ export function useSidebarLogic() {
     const startWidth = widthBlock
 
     const handleMouseMove = (moveEvent) => {
-      const delta = moveEvent.clientX - startX
-      const newWidth = startWidth + delta
+      const newWidth = startWidth + (moveEvent.clientX - startX)
       setWidthBlock(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth)))
     }
 
@@ -185,18 +174,13 @@ export function useSidebarLogic() {
     const time = {}
     const isReads = {}
     lastMessage.forEach((msg) => {
-      if (msg) {
-        if (msg.type === 'image') {
-          messageText[msg.dialogId] = 'Изображение'
-        } else {
-          messageText[msg.dialogId] = msg.text
-        }
-        time[msg.dialogId] = msg.timestamp
-        userIdMap[msg.dialogId] = msg.senderId
-        isReads[msg.dialogId] = msg.isRead
-      }
+      if (!msg) return
+      messageText[msg.dialogId] =
+        msg.type === 'image' ? 'Изображение' : msg.text
+      userIdMap[msg.dialogId] = msg.senderId
+      time[msg.dialogId] = msg.timestamp
+      isReads[msg.dialogId] = msg.isRead
     })
-
     return { messageText, userIdMap, time, isReads }
   }, [lastMessage])
 
@@ -206,7 +190,6 @@ export function useSidebarLogic() {
     userAvatars,
     chatIds,
     userStatus,
-
     runTour,
     userSearch,
     foundUser,
@@ -216,10 +199,8 @@ export function useSidebarLogic() {
     widthBlock,
     lastMessage,
     lastMessageMap,
-
     setFocus,
     setUserSearch,
-
     handleUserSearch,
     showLastMessage,
     changeWidth,
