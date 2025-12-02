@@ -17,7 +17,6 @@ const AvatarUploader = ({ avatarUrl, fileInputRef, setAvatarUrl }) => {
       formData.append('file', file)
       const imageUrl = await uploadImage(formData)
       const filePath = imageUrl.filePath
-
       const data = await updateProfile(null, filePath)
       setAvatarUrl(data.avatarUrl)
     }
