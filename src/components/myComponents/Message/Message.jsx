@@ -3,12 +3,11 @@ import ReactDOM from 'react-dom'
 import { Text } from '../../UI/uiKit/uiKits'
 import styles from './Message.module.scss'
 import { Context } from '../../../main'
-import { check, deleteMessage, getMessageReaction } from '../../../http/userApi'
+import { deleteMessage, getMessageReaction } from '../../../http/userApi'
 import { observer } from 'mobx-react'
 import {
   CHECKED,
   CLOWN,
-  DEFAULT_AVATAR,
   HAND_UP,
   HEART,
   NOT_CHECKED,
@@ -29,82 +28,62 @@ const Message = observer(
     setShow,
     selectChat,
   }) => {
-    const { reaction, user, message: messageStore } = useContext(Context)
+    const { reaction, user, message: messageStore, chat } = useContext(Context)
     const { id, text, timestamp, imgPath, isRead, dialogId } = message
     const messageRef = useRef(null)
+    const messageTextRef = useRef(null)
+    const menuRef = useRef(null)
     const isImage = !!imgPath
     const [emoji, setEmoji] = useState(null)
-    const touchTimer = useRef(null)
-    const longPressTriggered = useRef(false)
-
-    const { chat } = useContext(Context)
     const currentChat = chat.chats.find((c) => c.id == selectChat)
     const localDate = new Date(timestamp).toLocaleString()
     const formatDate = localDate.substring(11, 17)
-
-    const reactionMap = {
-      1: HEART,
-      2: HAND_UP,
-      3: CLOWN,
-    }
+    const reactionMap = { 1: HEART, 2: HAND_UP, 3: CLOWN }
+    const touchTimer = useRef(null)
+    const longPressTriggered = useRef(false)
+    const menuOpenedByTouch = useRef(false)
 
     const handleContextMenu = (event) => {
       event.preventDefault()
-      if (messageRef.current) {
-        const rect = messageRef.current.getBoundingClientRect()
-        const menuWidth = 160
-        const viewportWidth = window.innerWidth
+      event.stopPropagation()
 
-        if (isOwnMessage) {
-          setMenuPosition({
-            top: rect.top + window.scrollY + 10,
-            left: rect.left + window.scrollX - menuWidth,
-          })
-        } else {
-          const leftPosition = rect.right + window.scrollX
-          if (leftPosition + menuWidth > viewportWidth) {
-            setMenuPosition({
-              top: rect.top + window.scrollY + 10,
-              left: rect.left + window.scrollX - menuWidth,
-            })
-          } else {
-            setMenuPosition({
-              top: rect.top + window.scrollY + 10,
-              left: leftPosition + 5,
-            })
-          }
-        }
-        setActiveMessageId(id)
+      if (!messageRef.current) return
+
+      const rect = messageRef.current.getBoundingClientRect()
+      const menuWidth = 160
+      const viewportWidth = window.innerWidth
+      let left = rect.right + window.scrollX + 5
+
+      if (isOwnMessage || left + menuWidth > viewportWidth) {
+        left = rect.left + window.scrollX - menuWidth
       }
+
+      setMenuPosition({
+        top: rect.top + window.scrollY + 10,
+        left,
+      })
+      setActiveMessageId(id)
+    }
+
+    const handleCopy = () => {
+      navigator.clipboard.writeText(messageTextRef.current.innerText)
     }
 
     useEffect(() => {
-      const handleUpdatedCount = async () => {
+      const update = async () => {
         const data = await getMessageReaction(id, dialogId)
         setEmoji(data)
         reaction.setReaction(data)
       }
 
-      const handleReaction = async () => {
-        const data = await getMessageReaction(id, dialogId)
-        setEmoji(data)
-        reaction.setReaction(data)
-      }
-
-      const handleDeleteReaction = async () => {
-        const data = await getMessageReaction(id, dialogId)
-        setEmoji(data)
-        reaction.setReaction(data)
-      }
-
-      socket.on('updatedCount', handleUpdatedCount)
-      socket.on('reaction', handleReaction)
-      socket.on('deleteReaction', handleDeleteReaction)
+      socket.on('updatedCount', update)
+      socket.on('reaction', update)
+      socket.on('deleteReaction', update)
 
       return () => {
-        socket.off('updatedCount', handleUpdatedCount)
-        socket.off('reaction', handleReaction)
-        socket.off('deleteReaction', handleDeleteReaction)
+        socket.off('updatedCount', update)
+        socket.off('reaction', update)
+        socket.off('deleteReaction', update)
       }
     }, [id, dialogId, reaction])
 
@@ -115,7 +94,6 @@ const Message = observer(
         await deleteMessage(id)
       } catch (e) {
         alert('Сообщение не удалено')
-        console.log(e)
       } finally {
         handleClose()
       }
@@ -123,50 +101,18 @@ const Message = observer(
 
     async function setReaction(messageId, emojiId) {
       const userId = user.user.id
-      try {
-        socket.emit('newReaction', {
-          messageId: messageId,
-          emojiId: emojiId,
-          userId: userId,
-        })
-      } catch (e) {
-        console.error(e)
-      }
+      socket.emit('newReaction', { messageId, emojiId, userId })
     }
 
-    useEffect(() => {
-      const fetchReactions = async () => {
-        const data = await getMessageReaction(message.id, message.dialogId)
-        setEmoji(data)
-        reaction.setReaction(data)
-      }
-      fetchReactions()
-    }, [])
-
-    const menu = menuPosition && activeMessageId === id && (
-      <div
-        style={{
-          position: 'absolute',
-          top: menuPosition.top,
-          left: menuPosition.left,
-          zIndex: 1000,
-        }}
-        onClick={handleClose}
-      >
-        <RightClickMenu
-          setReaction={setReaction}
-          isOwnMessage={isOwnMessage}
-          messageId={id}
-          drop={dropMessage}
-        />
-      </div>
-    )
     const handleTouchStart = () => {
       longPressTriggered.current = false
+      menuOpenedByTouch.current = false
+
       touchTimer.current = setTimeout(() => {
         handleContextMenu({ preventDefault: () => {} })
         longPressTriggered.current = true
-      }, 1000)
+        menuOpenedByTouch.current = true
+      }, 600)
     }
 
     const handleTouchEnd = () => {
@@ -177,20 +123,67 @@ const Message = observer(
       clearTimeout(touchTimer.current)
     }
 
-    const handleClick = () => {
-      if (!longPressTriggered.current) {
-        handleClose()
+    useEffect(() => {
+      const fetchReactions = async () => {
+        const data = await getMessageReaction(id, dialogId)
+        setEmoji(data)
+        reaction.setReaction(data)
       }
-      longPressTriggered.current = false
-    }
+      fetchReactions()
+    }, [])
+
+    useEffect(() => {
+      const handleClickOutside = (e) => {
+        if (
+          menuRef.current &&
+          !menuRef.current.contains(e.target) &&
+          messageRef.current &&
+          !messageRef.current.contains(e.target) &&
+          !menuOpenedByTouch.current
+        ) {
+          handleClose()
+        }
+      }
+
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('touchstart', handleClickOutside)
+
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+        document.removeEventListener('touchstart', handleClickOutside)
+      }
+    }, [handleClose])
+
+    const menu = menuPosition && activeMessageId === id && (
+      <div
+        ref={menuRef}
+        style={{
+          position: 'absolute',
+          top: menuPosition.top,
+          left: menuPosition.left,
+          zIndex: 1000,
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
+        <RightClickMenu
+          setReaction={setReaction}
+          isOwnMessage={isOwnMessage}
+          handleCopy={handleCopy}
+          messageId={id}
+          drop={dropMessage}
+        />
+      </div>
+    )
 
     return (
       <>
         <div
           className={styles.messageWrapper}
           ref={messageRef}
-          onClick={handleClick}
-          onContextMenu={handleContextMenu}
+          onClick={(e) => {
+            if (e.button === 0) handleContextMenu(e)
+          }}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           onTouchMove={handleTouchMove}
@@ -203,7 +196,9 @@ const Message = observer(
                 alt=""
               />
             ) : (
-              <Text className={styles.messageText}>{text}</Text>
+              <Text ref={messageTextRef} className={styles.messageText}>
+                {text}
+              </Text>
             )}
           </div>
 
@@ -215,15 +210,13 @@ const Message = observer(
             {emoji && emoji.length > 0 && (
               <div className={styles.reactionWrapper}>
                 {emoji
-                  .filter((item) => item.messageId === message.id)
+                  .filter((item) => item.messageId === id)
                   .map((item, index) => {
                     const reactionOwner = item.userId === user.user.id
-                    const userAvatar =
-                      item.userId === user.user.id
-                        ? user.user.avatarUrl
-                        : currentChat.avatarUrl
+                    const userAvatar = reactionOwner
+                      ? user.user.avatarUrl
+                      : currentChat.avatarUrl
 
-                    console.log(item.userId)
                     return (
                       <Reactions
                         key={index}

@@ -4,7 +4,13 @@ import styles from './RightClickMenu.module.scss'
 import { CLOWN, HAND_UP, HEART } from '../../../utils/image'
 import clsx from 'clsx'
 
-const RightClickMenu = ({ setReaction, isOwnMessage, drop, messageId }) => {
+const RightClickMenu = ({
+  setReaction,
+  isOwnMessage,
+  drop,
+  messageId,
+  handleCopy,
+}) => {
   const emojiData = [
     {
       id: 1,
@@ -40,17 +46,20 @@ const RightClickMenu = ({ setReaction, isOwnMessage, drop, messageId }) => {
       </ListGroup.Item>
 
       {isOwnMessage && (
-        <>
-          <ListGroup.Item
-            className={clsx(styles.groupItem, styles.deleteItem)}
-            onClick={() => drop(messageId)}
-          >
-            Удалить
-          </ListGroup.Item>
-          <ListGroup.Item className={clsx(styles.groupItem)}>
-            Переслать
-          </ListGroup.Item>
-        </>
+        <ListGroup.Item className={clsx(styles.groupItem)}>
+          Переслать
+        </ListGroup.Item>
+      )}
+      <ListGroup.Item onClick={handleCopy} className={clsx(styles.groupItem)}>
+        Скопировать
+      </ListGroup.Item>
+      {isOwnMessage && (
+        <ListGroup.Item
+          className={clsx(styles.groupItem, styles.deleteItem)}
+          onClick={() => drop(messageId)}
+        >
+          Удалить
+        </ListGroup.Item>
       )}
     </ListGroup>
   )
