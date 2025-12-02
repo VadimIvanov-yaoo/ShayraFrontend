@@ -210,9 +210,9 @@
               {emoji && emoji.length > 0 && (
                 <div className={styles.reactionWrapper}>
                   {emoji
-                    .filter((item) => item.messageId === id)
+                    .filter((item) => item.messageId === id && item.emojiId)
                     .map((item, index) => {
-                       const reactionOwner = item.userId === user.user.id
+                      const reactionOwner = item.userId === user.user.id
                       const userAvatar = reactionOwner
                         ? user.user.avatarUrl
                         : currentChat.avatarUrl
@@ -222,11 +222,17 @@
                           key={index}
                           url={reactionMap[item.emojiId]}
                           sender={userAvatar}
-                          onClick={() =>
+                          onClick={(e) =>
+                            {
+                              e.stopPropagation()
+                              reactionOwner ? setReaction(id, null) : null
+                            }
+                          }
+                          onTouchStart={(e) =>
+                          {
+                            e.stopPropagation()
                             reactionOwner ? setReaction(id, null) : null
                           }
-                          onTouchStart={() =>
-                            reactionOwner ? setReaction(id, null) : null
                           }
                         />
                       )
