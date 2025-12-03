@@ -93,7 +93,7 @@ const ChatLayout = observer(() => {
       if (scrollToBottom.current) {
         scrollToBottom.current.scrollTop = scrollToBottom.current.scrollHeight
       }
-    }, 50)
+    }, 310)
   }
 
   return (

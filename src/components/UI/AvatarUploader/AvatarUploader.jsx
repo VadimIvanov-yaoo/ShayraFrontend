@@ -12,13 +12,17 @@ const AvatarUploader = ({ avatarUrl, fileInputRef, setAvatarUrl }) => {
 
   const handleImageChange = async (e) => {
     const file = e.target.files[0]
-    if (file) {
+    if (!file) return
+
+    try {
       const formData = new FormData()
       formData.append('file', file)
-      const imageUrl = await uploadImage(formData)
-      const filePath = imageUrl.filePath
+      const response = await uploadImage(formData)
+      const filePath = response.filePath
       const data = await updateProfile(null, filePath)
       setAvatarUrl(data.avatarUrl)
+    } catch (e) {
+      console.error('Ошибка при загрузке аватара:', e)
     }
   }
 

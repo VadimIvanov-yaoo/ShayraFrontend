@@ -7,6 +7,7 @@ import {
 
 export default class MessageStore {
   messages = []
+  lastRequestId = 0
 
   constructor() {
     makeAutoObservable(this)
@@ -22,23 +23,25 @@ export default class MessageStore {
       this.messages.push(message)
     }
   }
+
   deleteMessage(messageId) {
     this.messages = this.messages.filter((msg) => msg.id !== messageId)
   }
 
   async loadMessages(dialogId, userId) {
     if (!dialogId) return
+    const currentRequestId = ++this.lastRequestId
     try {
       readMessageChange(dialogId, userId)
       const messages = await getMessage(dialogId)
-
+      if (currentRequestId !== this.lastRequestId) return
       const messagesWithReactions = await Promise.all(
         messages.map(async (msg) => {
           const reactions = await getMessageReaction(msg.id, msg.dialogId)
           return { ...msg, reactions }
         })
       )
-
+      if (currentRequestId !== this.lastRequestId) return
       this.setMessages(messagesWithReactions)
     } catch (e) {
       console.error('Ошибка при получении сообщений', e)

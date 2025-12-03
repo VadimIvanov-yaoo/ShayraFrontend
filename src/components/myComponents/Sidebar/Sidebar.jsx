@@ -9,6 +9,7 @@ import JoyribeComponent from '../../UI/JoyribeComponent/JoyribeComponent'
 import { observer } from 'mobx-react'
 import { useSidebarLogic } from '../../../hooks/sideBarHooks/sideBarHooks'
 import { Context } from '../../../main'
+import { searchUser } from '../../../http/userApi'
 
 const Sidebar = observer(
   ({
@@ -36,6 +37,7 @@ const Sidebar = observer(
       changeWidth,
       mateAvatar,
       createNewChat,
+      setUserSearch,
     } = useSidebarLogic()
 
     const { chat, user, currentChat } = useContext(Context)
@@ -76,7 +78,10 @@ const Sidebar = observer(
                 <div className={styles.squareContent}>
                   {foundUser ? (
                     <UserCard
-                      create={() => createNewChat(userId2Ref.current)}
+                      create={() => {
+                        createNewChat(userId2Ref.current)
+                        setUserSearch("")
+                      }}
                       mateName={mate}
                       mateAvatar={mateAvatar}
                     />
@@ -91,7 +96,6 @@ const Sidebar = observer(
               const userSenderId = lastMessageMap.userIdMap[item.id] || ''
               const timeMessage = lastMessageMap.time[item.id] || ''
               const isRead = lastMessageMap.isReads[item.id]
-              // const isSelected = chat.currentChat?.id === item.id
               const isSelected = currentChat.currentChatId === item.id
 
               return (
