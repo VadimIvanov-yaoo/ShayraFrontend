@@ -148,6 +148,8 @@ export default class MessageStore {
         })
       )
 
+      console.log(messages)
+
       runInAction(() => {
         const sortedMessages = messagesWithReactions.sort((a, b) => a.id - b.id)
         this._messagesCache.set(dialogId, sortedMessages)

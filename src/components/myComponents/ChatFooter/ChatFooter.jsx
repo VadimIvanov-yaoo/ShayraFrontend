@@ -7,50 +7,10 @@ import { Context } from '../../../main'
 import { uploadImage } from '../../../http/userApi'
 import leoProfanity from 'leo-profanity'
 
-const ChatFooter = ({scrollToBottomFunc, selectChat }) => {
+const ChatFooter = ({ scrollToBottomFunc, selectChat }) => {
   const [message, setMessage] = useState('')
   const { user, chat } = useContext(Context)
   const currentChat = chat.chats.find((c) => c.id == selectChat)
-
-  leoProfanity.loadDictionary('ru')
-  leoProfanity.add(leoProfanity.getDictionary('en'))
-  leoProfanity.add([
-    'дурак',
-    'идиот',
-    'террор',
-    'idiot',
-    'террорист',
-    'терроризм',
-    'террористический',
-    'теракт',
-    'террористка',
-    'экстремизм',
-    'экстремист',
-    'экстремистский',
-    'джихад',
-    'шайтан',
-    'фашизм',
-    'нацизм',
-    'ксенофобия',
-    'бомба',
-    'взрывчатка',
-    'граната',
-    'оружие',
-    'пистолет',
-    'автомат',
-    'захват заложников',
-    'диверсия',
-    'головорез',
-    'душегуб',
-    'убийца',
-    'насильник',
-    'рецидивист',
-    'наркобарон',
-    'мародёр',
-    'громила',
-    'тротил',
-    'схрон',
-  ])
 
   if (!currentChat) return null
 
@@ -71,6 +31,7 @@ const ChatFooter = ({scrollToBottomFunc, selectChat }) => {
       type: 'image',
       content: filePath,
       senderId: user.user.id,
+      senderName: user.user.userName,
       dialogId: currentChat.id,
       time: new Date().toISOString(),
     })
@@ -79,7 +40,7 @@ const ChatFooter = ({scrollToBottomFunc, selectChat }) => {
   async function sendMessage(e) {
     e.preventDefault()
     const cleanText = leoProfanity.clean(message)
-    console.log(cleanText)
+
     if (message.trim() !== '') {
       socket.emit('newMessage', {
         type: 'text',
@@ -88,6 +49,7 @@ const ChatFooter = ({scrollToBottomFunc, selectChat }) => {
         participantName: currentChat.participantName,
         dialogId: currentChat.id,
         senderId: user.user.id,
+        senderName: user.user.userName,
         time: formatDate,
       })
 
@@ -96,7 +58,13 @@ const ChatFooter = ({scrollToBottomFunc, selectChat }) => {
       if (scrollToBottomFunc) {
         setTimeout(() => scrollToBottomFunc(), 100)
       }
+    }
+  }
 
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage(e)
     }
   }
 
@@ -118,6 +86,7 @@ const ChatFooter = ({scrollToBottomFunc, selectChat }) => {
           value={message}
           placeholder="Введите сообщение..."
           onChange={(e) => setMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
         />
         <button onClick={sendMessage} className={styles.sendBtn}>
           <img src={send} alt="Send" />

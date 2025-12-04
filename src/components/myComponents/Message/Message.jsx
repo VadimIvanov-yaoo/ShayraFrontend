@@ -1,262 +1,324 @@
-  import React, { useContext, useEffect, useRef, useState } from 'react'
-  import ReactDOM from 'react-dom'
-  import { Text } from '../../UI/uiKit/uiKits'
-  import styles from './Message.module.scss'
-  import { Context } from '../../../main'
-  import { deleteMessage, getMessageReaction } from '../../../http/userApi'
-  import { observer } from 'mobx-react'
-  import {
-    CHECKED,
-    CLOWN,
-    HAND_UP,
-    HEART,
-    NOT_CHECKED,
-  } from '../../../utils/image'
-  import RightClickMenu from '../RightClickMenu/RightClickMenu'
-  import socket from '../../../Websoket/socket'
-  import Reactions from '../Reactions/Reactions'
+import React, { useContext, useEffect, useRef, useState } from 'react'
+import ReactDOM from 'react-dom'
+import { Text } from '../../UI/uiKit/uiKits'
+import styles from './Message.module.scss'
+import { Context } from '../../../main'
+import { deleteMessage, getMessageReaction } from '../../../http/userApi'
+import { observer } from 'mobx-react'
+import {
+  CHECKED,
+  CLOWN,
+  HAND_UP,
+  HEART,
+  NOT_CHECKED,
+} from '../../../utils/image'
+import RightClickMenu from '../RightClickMenu/RightClickMenu'
+import socket from '../../../Websoket/socket'
+import Reactions from '../Reactions/Reactions'
+import ForwardMessageModal from '../ForwardMessageModal/ForwardMessageModal'
+import ForwardMessage from '../ForwardMessage/ForwardMessage'
 
-  const Message = observer(
-    ({
-      message,
-      isOwnMessage,
-      handleClose,
-      menuPosition,
-      setMenuPosition,
-      activeMessageId,
-      setActiveMessageId,
-      setShow,
-      selectChat,
-    }) => {
-      const { reaction, user, message: messageStore, chat } = useContext(Context)
-      const { id, text, timestamp, imgPath, isRead, dialogId } = message
-      const messageRef = useRef(null)
-      const messageTextRef = useRef(null)
-      const menuRef = useRef(null)
-      const isImage = !!imgPath
-      const [emoji, setEmoji] = useState(null)
-      const currentChat = chat.chats.find((c) => c.id == selectChat)
-      const localDate = new Date(timestamp).toLocaleString()
-      const formatDate = localDate.substring(11, 17)
-      const reactionMap = { 1: HEART, 2: HAND_UP, 3: CLOWN }
-      const touchTimer = useRef(null)
-      const longPressTriggered = useRef(false)
-      const menuOpenedByTouch = useRef(false)
+const Message = observer(
+  ({
+    message,
+    isOwnMessage,
+    handleClose,
+    menuPosition,
+    setMenuPosition,
+    activeMessageId,
+    setActiveMessageId,
+    setShow,
+    selectChat,
+  }) => {
+    const { reaction, user, message: messageStore, chat } = useContext(Context)
+    const { id, text, timestamp, imgPath, isRead, dialogId } = message
+    const messageRef = useRef(null)
+    const messageTextRef = useRef(null)
+    const menuRef = useRef(null)
+    const isImage = !!imgPath
+    const [emoji, setEmoji] = useState(null)
+    const [showForwardModal, setShowForwardModal] = useState(false)
+    const currentChat = chat.chats.find((c) => c.id == selectChat)
+    const localDate = new Date(timestamp).toLocaleString()
+    const formatDate = localDate.substring(11, 17)
+    const reactionMap = { 1: HEART, 2: HAND_UP, 3: CLOWN }
+    const touchTimer = useRef(null)
+    const longPressTriggered = useRef(false)
+    const menuOpenedByTouch = useRef(false)
 
-      const handleContextMenu = (event) => {
-        event.preventDefault()
-        event.stopPropagation()
+    const handleContextMenu = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
 
-        if (!messageRef.current) return
+      if (!messageRef.current) return
 
-        const rect = messageRef.current.getBoundingClientRect()
-        const menuWidth = 160
-        const viewportWidth = window.innerWidth
-        let left = rect.right + window.scrollX + 5
+      const rect = messageRef.current.getBoundingClientRect()
+      const menuWidth = 160
+      const viewportWidth = window.innerWidth
+      let left = rect.right + window.scrollX + 5
 
-        if (isOwnMessage || left + menuWidth > viewportWidth) {
-          left = rect.left + window.scrollX - menuWidth
+      if (isOwnMessage || left + menuWidth > viewportWidth) {
+        left = rect.left + window.scrollX - menuWidth
+      }
+
+      setMenuPosition({
+        top: rect.top + window.scrollY + 10,
+        left,
+      })
+      setActiveMessageId(id)
+    }
+
+    const handleCopy = () => {
+      navigator.clipboard.writeText(messageTextRef.current.innerText)
+      handleClose()
+    }
+
+    const handleForward = () => {
+      setShowForwardModal(true)
+      handleClose()
+    }
+
+    const sendForwardedMessage = async (messageToForward, targetChatId) => {
+      try {
+        let originalSenderName = 'Пользователь'
+
+        if (messageToForward.senderId === user.user.id) {
+          originalSenderName = 'Вы'
+        } else {
+          const chatWithSender = chat.chats.find(
+            (c) =>
+              c.otherId === messageToForward.senderId ||
+              c.creatorId === messageToForward.senderId ||
+              c.participantId === messageToForward.senderId
+          )
+
+          if (chatWithSender) {
+            originalSenderName = chatWithSender.chatName || 'Пользователь'
+          } else if (messageToForward.senderName) {
+            originalSenderName = messageToForward.senderName
+          }
         }
 
-        setMenuPosition({
-          top: rect.top + window.scrollY + 10,
-          left,
+        const forwardedText = `Переслано от ${originalSenderName}:\n${messageToForward.text || ''}`
+
+        socket.emit('newMessage', {
+          type: messageToForward.imgPath ? 'image' : 'text',
+          text: messageToForward.imgPath ? null : messageToForward.text,
+          forwardedText,
+          content: messageToForward.imgPath ? messageToForward.imgPath : null,
+          senderId: user.user.id,
+          senderName: user.user.userName,
+          dialogId: targetChatId,
+          time: new Date().toISOString(),
+          isForwarded: true,
+          originalSenderId: messageToForward.senderId,
+          originalSenderName,
+          originalMessageId: messageToForward.id,
         })
-        setActiveMessageId(id)
+      } catch (error) {
+        console.error('Ошибка пересылки:', error)
+      }
+    }
+
+
+    useEffect(() => {
+      const update = async () => {
+        const data = await getMessageReaction(id, dialogId)
+        setEmoji(data)
+        reaction.setReaction(data)
       }
 
-      const handleCopy = () => {
-        navigator.clipboard.writeText(messageTextRef.current.innerText)
+      socket.on('updatedCount', update)
+      socket.on('reaction', update)
+      socket.on('deleteReaction', update)
+
+      return () => {
+        socket.off('updatedCount', update)
+        socket.off('reaction', update)
+        socket.off('deleteReaction', update)
       }
+    }, [id, dialogId, reaction])
 
-      useEffect(() => {
-        const update = async () => {
-          const data = await getMessageReaction(id, dialogId)
-          setEmoji(data)
-          reaction.setReaction(data)
-        }
+    const dropMessage = async () => {
+      try {
+        messageStore.deleteMessage(id)
+        setShow(true)
+        await deleteMessage(id)
+      } catch (e) {
+        alert('Сообщение не удалено')
+      } finally {
+        handleClose()
+      }
+    }
 
-        socket.on('updatedCount', update)
-        socket.on('reaction', update)
-        socket.on('deleteReaction', update)
+    async function setReaction(messageId, emojiId) {
+      const userId = user.user.id
+      socket.emit('newReaction', { messageId, emojiId, userId })
+    }
 
-        return () => {
-          socket.off('updatedCount', update)
-          socket.off('reaction', update)
-          socket.off('deleteReaction', update)
-        }
-      }, [id, dialogId, reaction])
+    const handleTouchStart = () => {
+      longPressTriggered.current = false
+      menuOpenedByTouch.current = false
 
-      const dropMessage = async () => {
-        try {
-          messageStore.deleteMessage(id)
-          setShow(true)
-          await deleteMessage(id)
-        } catch (e) {
-          alert('Сообщение не удалено')
-        } finally {
+      touchTimer.current = setTimeout(() => {
+        handleContextMenu({ preventDefault: () => {} })
+        longPressTriggered.current = true
+        menuOpenedByTouch.current = true
+      }, 600)
+    }
+
+    const handleTouchEnd = () => {
+      clearTimeout(touchTimer.current)
+    }
+
+    const handleTouchMove = () => {
+      clearTimeout(touchTimer.current)
+    }
+
+    useEffect(() => {
+      const fetchReactions = async () => {
+        const data = await getMessageReaction(id, dialogId)
+        setEmoji(data)
+        reaction.setReaction(data)
+      }
+      fetchReactions()
+    }, [])
+
+    useEffect(() => {
+      const handleClickOutside = (e) => {
+        if (
+          menuRef.current &&
+          !menuRef.current.contains(e.target) &&
+          messageRef.current &&
+          !messageRef.current.contains(e.target) &&
+          !menuOpenedByTouch.current
+        ) {
           handleClose()
         }
       }
 
-      async function setReaction(messageId, emojiId) {
-        const userId = user.user.id
-        socket.emit('newReaction', { messageId, emojiId, userId })
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('touchstart', handleClickOutside)
+
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+        document.removeEventListener('touchstart', handleClickOutside)
       }
+    }, [handleClose])
 
-      const handleTouchStart = () => {
-        longPressTriggered.current = false
-        menuOpenedByTouch.current = false
+    const menu = menuPosition && activeMessageId === id && (
+      <div
+        ref={menuRef}
+        style={{
+          position: 'absolute',
+          top: menuPosition.top,
+          left: menuPosition.left,
+          zIndex: 1000,
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
+        <RightClickMenu
+          setReaction={setReaction}
+          isOwnMessage={isOwnMessage}
+          handleCopy={handleCopy}
+          messageId={id}
+          drop={dropMessage}
+          onForward={handleForward}
+        />
+      </div>
+    )
 
-        touchTimer.current = setTimeout(() => {
-          handleContextMenu({ preventDefault: () => {} })
-          longPressTriggered.current = true
-          menuOpenedByTouch.current = true
-        }, 600)
-      }
-
-      const handleTouchEnd = () => {
-        clearTimeout(touchTimer.current)
-      }
-
-      const handleTouchMove = () => {
-        clearTimeout(touchTimer.current)
-      }
-
-      useEffect(() => {
-        const fetchReactions = async () => {
-          const data = await getMessageReaction(id, dialogId)
-          setEmoji(data)
-          reaction.setReaction(data)
-        }
-        fetchReactions()
-      }, [])
-
-      useEffect(() => {
-        const handleClickOutside = (e) => {
-          if (
-            menuRef.current &&
-            !menuRef.current.contains(e.target) &&
-            messageRef.current &&
-            !messageRef.current.contains(e.target) &&
-            !menuOpenedByTouch.current
-          ) {
-            handleClose()
-          }
-        }
-
-        document.addEventListener('mousedown', handleClickOutside)
-        document.addEventListener('touchstart', handleClickOutside)
-
-        return () => {
-          document.removeEventListener('mousedown', handleClickOutside)
-          document.removeEventListener('touchstart', handleClickOutside)
-        }
-      }, [handleClose])
-
-      const menu = menuPosition && activeMessageId === id && (
+    return (
+      <>
         <div
-          ref={menuRef}
-          style={{
-            position: 'absolute',
-            top: menuPosition.top,
-            left: menuPosition.left,
-            zIndex: 1000,
+          className={styles.messageWrapper}
+          ref={messageRef}
+          onClick={(e) => {
+            if (e.button === 0) handleContextMenu(e)
           }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onTouchMove={handleTouchMove}
         >
-          <RightClickMenu
-            setReaction={setReaction}
-            isOwnMessage={isOwnMessage}
-            handleCopy={handleCopy}
-            messageId={id}
-            drop={dropMessage}
-          />
-        </div>
-      )
+          <div className={styles.message}>
+            <ForwardMessage
+              text={message.forwardedText}
+              isForwarded={message.isForwarded}
+              originalSenderName={message.originalSenderName}
+            />
 
-      return (
-        <>
-          <div
-            className={styles.messageWrapper}
-            ref={messageRef}
-            onClick={(e) => {
-              if (e.button === 0) handleContextMenu(e)
-            }}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            onTouchMove={handleTouchMove}
-          >
-            <div className={styles.message}>
-              {isImage ? (
-                <img
-                  className={styles.imgMessage}
-                  src={import.meta.env.VITE_API_URL + imgPath}
-                  alt=""
-                />
-              ) : (
-                <Text ref={messageTextRef} className={styles.messageText}>
-                  {text}
-                </Text>
-              )}
-            </div>
-
-            <div
-              className={`${styles.messageFooter} ${
-                !emoji || emoji.length === 0 ? styles.noReaction : ''
-              }`}
-            >
-              {emoji && emoji.length > 0 && (
-                <div className={styles.reactionWrapper}>
-                  {emoji
-                    .filter((item) => item.messageId === id && item.emojiId)
-                    .map((item, index) => {
-                      const reactionOwner = item.userId === user.user.id
-                      const userAvatar = reactionOwner
-                        ? user.user.avatarUrl
-                        : currentChat.avatarUrl
-
-                      return (
-                        <Reactions
-                          key={index}
-                          url={reactionMap[item.emojiId]}
-                          sender={userAvatar}
-                          onClick={(e) =>
-                            {
-                              e.stopPropagation()
-                              reactionOwner ? setReaction(id, null) : null
-                            }
-                          }
-                          onTouchStart={(e) =>
-                          {
-                            e.stopPropagation()
-                            reactionOwner ? setReaction(id, null) : null
-                          }
-                          }
-                        />
-                      )
-                    })}
-                </div>
-              )}
-
-              <div className={styles.footerLeft}>
-                <Text className={styles.time}>{formatDate}</Text>
-                {isOwnMessage && (
-                  <img
-                    className={styles.status}
-                    src={isRead ? CHECKED : NOT_CHECKED}
-                    alt=""
-                  />
-                )}
-              </div>
-            </div>
+            {isImage ? (
+              <img
+                className={styles.imgMessage}
+                src={import.meta.env.VITE_API_URL + imgPath}
+                alt=""
+              />
+            ) : (
+              <Text ref={messageTextRef} className={styles.messageText}>
+                {text}
+              </Text>
+            )}
           </div>
 
-          {menu && ReactDOM.createPortal(menu, document.body)}
-        </>
-      )
-    }
-  )
+          <div
+            className={`${styles.messageFooter} ${
+              !emoji || emoji.length === 0 ? styles.noReaction : ''
+            }`}
+          >
+            {emoji && emoji.length > 0 && (
+              <div className={styles.reactionWrapper}>
+                {emoji
+                  .filter((item) => item.messageId === id && item.emojiId)
+                  .map((item, index) => {
+                    const reactionOwner = item.userId === user.user.id
+                    const userAvatar = reactionOwner
+                      ? user.user.avatarUrl
+                      : currentChat.avatarUrl
 
-  export default Message
+                    return (
+                      <Reactions
+                        key={index}
+                        url={reactionMap[item.emojiId]}
+                        sender={userAvatar}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          reactionOwner ? setReaction(id, null) : null
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation()
+                          reactionOwner ? setReaction(id, null) : null
+                        }}
+                      />
+                    )
+                  })}
+              </div>
+            )}
+
+            <div className={styles.footerLeft}>
+              <Text className={styles.time}>{formatDate}</Text>
+              {isOwnMessage && (
+                <img
+                  className={styles.status}
+                  src={isRead ? CHECKED : NOT_CHECKED}
+                  alt=""
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {menu && ReactDOM.createPortal(menu, document.body)}
+
+        <ForwardMessageModal
+          show={showForwardModal}
+          onHide={() => setShowForwardModal(false)}
+          message={message}
+          onForward={sendForwardedMessage}
+        />
+      </>
+    )
+  }
+)
+
+export default Message

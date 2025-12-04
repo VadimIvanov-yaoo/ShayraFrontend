@@ -10,6 +10,7 @@
     drop,
     messageId,
     handleCopy,
+    onForward,
   }) => {
     const emojiData = [
       {
@@ -46,7 +47,10 @@
         </ListGroup.Item>
 
         {isOwnMessage && (
-          <ListGroup.Item className={clsx(styles.groupItem)}>
+          <ListGroup.Item
+            onClick={onForward}
+            className={clsx(styles.groupItem)}
+          >
             Переслать
           </ListGroup.Item>
         )}
