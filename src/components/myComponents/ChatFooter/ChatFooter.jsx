@@ -7,7 +7,7 @@ import { Context } from '../../../main'
 import { uploadImage } from '../../../http/userApi'
 import leoProfanity from 'leo-profanity'
 
-const ChatFooter = ({ selectChat }) => {
+const ChatFooter = ({scrollToBottomFunc, selectChat }) => {
   const [message, setMessage] = useState('')
   const { user, chat } = useContext(Context)
   const currentChat = chat.chats.find((c) => c.id == selectChat)
@@ -92,6 +92,11 @@ const ChatFooter = ({ selectChat }) => {
       })
 
       setMessage('')
+
+      if (scrollToBottomFunc) {
+        setTimeout(() => scrollToBottomFunc(), 100)
+      }
+
     }
   }
 

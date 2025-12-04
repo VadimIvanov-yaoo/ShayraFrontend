@@ -1,4 +1,10 @@
-import React, { useContext, useEffect, useRef, useState } from 'react'
+import React, {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from 'react'
 import { Container, Flex, Section } from '../../components/UI/uiKit/uiKits.jsx'
 import Sidebar from '../../components/myComponents/Sidebar/Sidebar.jsx'
 import ChatView from '../../components/myComponents/ChatView/ChatView.jsx'
@@ -14,6 +20,15 @@ const ChatLayout = observer(() => {
   const [show, setShow] = useState(false)
   const scrollToBottom = useRef(null)
   const [blockedChats, setBlockedChats] = useState({})
+  const lastMessageRef = useRef(null)
+
+  const scrollToBottomFunc = useCallback(() => {
+    if (scrollToBottom.current) {
+      setTimeout(() => {
+        scrollToBottom.current.scrollTop = scrollToBottom.current.scrollHeight
+      }, 100)
+    }
+  }, [])
 
   useEffect(() => {
     const userId = user.user.id
@@ -21,6 +36,26 @@ const ChatLayout = observer(() => {
     const timer = setInterval(() => socket.emit('onlineUser', userId), 10000)
     return () => clearInterval(timer)
   }, [user.user.id])
+
+  useEffect(() => {
+    const handleNewMessage = (message) => {
+      if (message.dialogId === selectChat) {
+        scrollToBottomFunc()
+      }
+    }
+
+    socket.on('messageCreated', handleNewMessage)
+
+    return () => {
+      socket.off('messageCreated', handleNewMessage)
+    }
+  }, [selectChat, scrollToBottomFunc])
+
+  useEffect(() => {
+    if (selectChat) {
+      scrollToBottomFunc()
+    }
+  }, [selectChat, scrollToBottomFunc])
 
   useEffect(() => {
     if (!selectChat) return
@@ -90,9 +125,7 @@ const ChatLayout = observer(() => {
     currentChat.toggleSidebar(true)
 
     setTimeout(() => {
-      if (scrollToBottom.current) {
-        scrollToBottom.current.scrollTop = scrollToBottom.current.scrollHeight
-      }
+      scrollToBottomFunc()
     }, 310)
   }
 
@@ -116,6 +149,7 @@ const ChatLayout = observer(() => {
               setShow={setShow}
               scrollToBottom={scrollToBottom}
               blockedChats={blockedChats}
+              onScrollToBottom={scrollToBottomFunc}
             />
           )}
         </Flex>

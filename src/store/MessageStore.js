@@ -1,4 +1,4 @@
-import { action, makeAutoObservable, observable, runInAction } from 'mobx'
+import { makeAutoObservable, observable, runInAction } from 'mobx'
 import {
   getMessage,
   getMessageReaction,
@@ -6,138 +6,140 @@ import {
 } from '../http/userApi'
 
 export default class MessageStore {
-  messages = []
-  lastRequestId = 0
+  _messagesCache = new Map()
+  _currentDialogId = null
+  _loadingDialogs = new Set()
   _socket = null
 
   constructor() {
     makeAutoObservable(this, {
-      messages: observable,
-      lastRequestId: observable,
-      setSocket: action,
+      _messagesCache: observable,
+      _currentDialogId: observable,
+      _loadingDialogs: observable,
     })
   }
 
   setSocket(socket) {
     this._socket = socket
     if (socket) {
-      this.setupSocketListeners()
+      this._setupSocketListeners()
     }
   }
 
-  setupSocketListeners() {
+  _setupSocketListeners() {
     if (!this._socket) return
 
     this._socket.on('messageCreated', (message) => {
-      runInAction(() => {
-        const exists = this.messages.some((m) => m.id === message.id)
-        if (!exists) {
-          this.messages.push(message)
-          this.sortMessages()
-        }
-      })
+      this._addMessageToCache(message)
+    })
+
+    this._socket.on('reaction', (reaction) => {
+      this._updateReactionInCache(reaction)
     })
 
     this._socket.on('deleteReaction', (data) => {
-      runInAction(() => {
-        const message = this.messages.find((m) => m.id === data.messageId)
-        if (message && message.reactions) {
-          message.reactions = message.reactions.filter(
-            (r) => r.userId !== data.userId
-          )
-        }
-      })
-    })
-
-    this._socket.on('reactionCreated', (reaction) => {
-      runInAction(() => {
-        const message = this.messages.find((m) => m.id === reaction.messageId)
-        if (message) {
-          if (!message.reactions) message.reactions = []
-          const exists = message.reactions.some(
-            (r) =>
-              r.id === reaction.id ||
-              (r.messageId === reaction.messageId &&
-                r.userId === reaction.userId)
-          )
-          if (!exists) {
-            message.reactions.push(reaction)
-          }
-        }
-      })
-      this._socket.on('chatDeleted', (data) => {
-        runInAction(() => {
-          this.messages = this.messages.filter(
-            (msg) => msg.dialogId !== data.chatId
-          )
-        })
-      })
-    })
-
-    this._socket.on('reactionUpdated', (reaction) => {
-      runInAction(() => {
-        const message = this.messages.find((m) => m.id === reaction.messageId)
-        if (message && message.reactions) {
-          const index = message.reactions.findIndex(
-            (r) =>
-              r.messageId === reaction.messageId && r.userId === reaction.userId
-          )
-          if (index !== -1) {
-            message.reactions[index] = reaction
-          } else {
-            message.reactions.push(reaction)
-          }
-        }
-      })
+      this._deleteReactionFromCache(data)
     })
   }
 
-  setMessages(messages) {
+  _addMessageToCache(message) {
     runInAction(() => {
-      this.messages = messages
-      this.sortMessages()
-    })
-  }
+      let messages = this._messagesCache.get(message.dialogId)
+      if (!messages) {
+        messages = [message]
+        this._messagesCache.set(message.dialogId, messages)
+        return
+      }
 
-  addMessage(message) {
-    runInAction(() => {
-      const exists = this.messages.some((m) => m.id === message.id)
+      const exists = messages.some((m) => m.id === message.id)
       if (!exists) {
-        this.messages.push(message)
-        this.sortMessages()
+        // Бинарный поиск для вставки в отсортированный массив
+        let low = 0
+        let high = messages.length - 1
+
+        while (low <= high) {
+          const mid = Math.floor((low + high) / 2)
+          if (messages[mid].id < message.id) {
+            low = mid + 1
+          } else {
+            high = mid - 1
+          }
+        }
+
+        messages.splice(low, 0, message)
       }
     })
   }
 
-  updateMessageStatus(messageId, isRead) {
+  _updateReactionInCache(reaction) {
     runInAction(() => {
-      const message = this.messages.find((m) => m.id === messageId)
-      if (message) {
-        message.isRead = isRead
+      const messages = this._messagesCache.get(reaction.dialogId)
+      if (!messages) return
+
+      const message = messages.find((m) => m.id === reaction.messageId)
+      if (!message) return
+
+      if (!message.reactions) message.reactions = []
+
+      const index = message.reactions.findIndex(
+        (r) =>
+          r.messageId === reaction.messageId && r.userId === reaction.userId
+      )
+
+      if (index !== -1) {
+        if (reaction.emojiId === null) {
+          message.reactions.splice(index, 1)
+        } else {
+          message.reactions[index] = reaction
+        }
+      } else if (reaction.emojiId !== null) {
+        message.reactions.push(reaction)
       }
     })
   }
 
-  deleteMessage(messageId) {
+  _deleteReactionFromCache(data) {
     runInAction(() => {
-      this.messages = this.messages.filter((msg) => msg.id !== messageId)
+      const messages = this._messagesCache.get(data.dialogId)
+      if (!messages) return
+
+      const message = messages.find((m) => m.id === data.messageId)
+      if (!message || !message.reactions) return
+
+      message.reactions = message.reactions.filter(
+        (r) => r.userId !== data.userId
+      )
     })
   }
 
-  sortMessages() {
-    this.messages.sort(
-      (a, b) =>
-        new Date(a.time || a.timestamp) - new Date(b.time || b.timestamp)
-    )
+  setCurrentDialog(dialogId) {
+    runInAction(() => {
+      this._currentDialogId = dialogId
+    })
+  }
+
+  get messages() {
+    if (!this._currentDialogId) return []
+    return this._messagesCache.get(this._currentDialogId) || []
+  }
+
+  get isLoading() {
+    return this._loadingDialogs.has(this._currentDialogId)
   }
 
   async loadMessages(dialogId, userId) {
-    if (!dialogId) return
-    const currentRequestId = ++this.lastRequestId
+    if (!dialogId || !userId) return
+
+    if (this._loadingDialogs.has(dialogId)) return
+
+    runInAction(() => {
+      this._loadingDialogs.add(dialogId)
+      this._currentDialogId = dialogId
+    })
+
     try {
       await readMessageChange(dialogId, userId)
       const messages = await getMessage(dialogId)
-      if (currentRequestId !== this.lastRequestId) return
 
       const messagesWithReactions = await Promise.all(
         messages.map(async (msg) => {
@@ -146,12 +148,26 @@ export default class MessageStore {
         })
       )
 
-      if (currentRequestId !== this.lastRequestId) return
       runInAction(() => {
-        this.setMessages(messagesWithReactions)
+        const sortedMessages = messagesWithReactions.sort((a, b) => a.id - b.id)
+        this._messagesCache.set(dialogId, sortedMessages)
+        this._loadingDialogs.delete(dialogId)
       })
-    } catch (e) {
-      console.error('Ошибка при получении сообщений', e)
+    } catch (error) {
+      runInAction(() => {
+        this._loadingDialogs.delete(dialogId)
+      })
+      console.error('Ошибка загрузки сообщений:', error)
     }
+  }
+
+  clearDialogCache(dialogId) {
+    runInAction(() => {
+      this._messagesCache.delete(dialogId)
+    })
+  }
+
+  addMessage(message) {
+    this._addMessageToCache(message)
   }
 }

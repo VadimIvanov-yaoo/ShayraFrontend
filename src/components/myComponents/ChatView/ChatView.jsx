@@ -14,6 +14,7 @@ const ChatView = ({
   scrollToBottom,
   selectChat,
   blockedChats,
+  scrollToBottomFunc,
 }) => {
   const { user } = useContext(Context)
   const chatStatus = blockedChats[String(selectChat)]
@@ -35,7 +36,10 @@ const ChatView = ({
             setShow={setShow}
             scrollToBottom={scrollToBottom}
           />
-          <ChatFooter selectChat={selectChat} />
+          <ChatFooter
+            scrollToBottomFunc={scrollToBottomFunc}
+            selectChat={selectChat}
+          />
         </div>
       ) : (
         <div className={styles.blockedNotice}>
