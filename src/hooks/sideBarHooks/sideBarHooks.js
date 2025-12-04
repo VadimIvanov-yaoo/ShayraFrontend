@@ -17,13 +17,23 @@ export function useCreateChat() {
   const createNewChat = async (userId2) => {
     try {
       const dialog = await createChat(user.user.id, userId2)
+
       runInAction(() => {
-        if (!chat.chats.some((c) => c.id === dialog.id)) {
-          chat.chats.push(dialog)
-          console.log('Успешно создан')
-        } else {
-          console.log('Чат уже существует')
+        chat.refreshChats().then(() => {
+          chat.setCurrentChat(dialog.id)
+        })
+
+        if (socket) {
+          socket.emit('notifyNewChat', {
+            dialogId: dialog.id,
+            participantId: user.user.id,
+            participantName: user.user.userName,
+            participantAvatar: user.user.avatarUrl || DEFAULT_AVATAR,
+            forUserId: userId2,
+          })
         }
+
+        console.log('Чат успешно создан')
       })
     } catch (error) {
       console.error('Ошибка создания чата', error)
@@ -38,7 +48,6 @@ export function useSidebarLogic() {
 
   const sidebarRef = useRef(null)
   const userId2Ref = useRef(null)
-  const intervalRef = useRef(null)
 
   const [runTour, setRunTour] = useState(false)
   const [userSearch, setUserSearch] = useState('')
@@ -48,43 +57,53 @@ export function useSidebarLogic() {
   const [focus, setFocus] = useState(false)
   const [widthBlock, setWidthBlock] = useState(365)
   const [lastMessage, setLastMessage] = useState([])
-  const [userAvatars, setUserAvatars] = useState({})
-  const [userStatus, setUserStatus] = useState({})
 
   const MAX_WIDTH = 635
   const MIN_WIDTH = 340
   const createNewChat = useCreateChat()
 
-  const chatIds = useMemo(() => chat.chats.map((c) => c.id), [chat.chats])
-
   useEffect(() => {
     chat.loadChats()
-  }, [chat])
 
-  useEffect(() => {
-    if (chat.chats.length > 0) showLastMessage()
-  }, [chat.chats])
+    if (socket) {
+      chat.setSocket(socket)
+      message.setSocket(socket)
+      user.setSocket(socket)
 
-  useEffect(() => {
-    if (chatIds.length > 0) getUserInfo()
-  }, [chatIds])
-
-  useEffect(() => {
-    if (!socket) return
-    const handleNewMessage = (msg) => {
-      if (!msg || !msg.dialogId) return
-      setLastMessage((prev) => {
-        const filtered = prev.filter((m) => m && m.dialogId !== msg.dialogId)
-        return [...filtered, msg]
-      })
+      if (user.user?.id) {
+        socket.emit('onlineUser', user.user.id)
+      }
     }
-
-    socket.on('messageCreated', handleNewMessage)
 
     return () => {
-      socket.off('messageCreated', handleNewMessage)
+      if (socket) {
+        socket.off('newChatNotification')
+        socket.off('chatCreated')
+      }
     }
-  }, [socket])
+  }, [chat, message, user, socket])
+
+  useEffect(() => {
+    if (socket) {
+      const handleNewMessage = (msg) => {
+        if (!msg || !msg.dialogId) return
+        runInAction(() => {
+          setLastMessage((prev) => {
+            const filtered = prev.filter(
+              (m) => m && m.dialogId !== msg.dialogId
+            )
+            return [...filtered, msg]
+          })
+        })
+      }
+
+      socket.on('messageCreated', handleNewMessage)
+
+      return () => {
+        socket.off('messageCreated', handleNewMessage)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -96,20 +115,25 @@ export function useSidebarLogic() {
 
   useEffect(() => {
     if (!chat.currentChat?.id) return
+
     message.loadMessages(chat.currentChat.id, user.user.id)
 
-    if (intervalRef.current) clearInterval(intervalRef.current)
-    intervalRef.current = setInterval(() => {
+    const intervalId = setInterval(() => {
       message.loadMessages(chat.currentChat?.id, user.user.id)
     }, 3000)
 
-    return () => clearInterval(intervalRef.current)
-  }, [chat.currentChat?.id])
+    return () => clearInterval(intervalId)
+  }, [chat.currentChat?.id, message, user.user.id])
 
   async function showLastMessage() {
     try {
+      const chatIds = chat.chats.map((c) => c.id)
+      if (chatIds.length === 0) return
+
       const lastMessages = await getLastedMessage({ chatIds })
-      setLastMessage(lastMessages)
+      runInAction(() => {
+        setLastMessage(lastMessages)
+      })
     } catch (error) {
       console.error(error)
     }
@@ -120,20 +144,41 @@ export function useSidebarLogic() {
       const participantIds = chat.chats.map((c) =>
         c.creatorId === user.user.id ? c.participantId : c.creatorId
       )
+      if (participantIds.length === 0) return
+
       const data = await getInfoUsers({ chatIds: participantIds })
-      const avatarsById = {}
-      const statusById = {}
-      participantIds.forEach((id) => {
-        const userData = data.find((u) => u.id === id)
-        avatarsById[id] = userData?.avatarUrl || DEFAULT_AVATAR
-        statusById[id] = userData?.status || null
+      runInAction(() => {
+        participantIds.forEach((id) => {
+          const userData = data.find((u) => u.id === id)
+          if (userData) {
+            const chatForId = chat.chats.find(
+              (c) =>
+                c.otherId === id ||
+                (c.creatorId === user.user.id
+                  ? c.participantId === id
+                  : c.creatorId === id)
+            )
+            if (chatForId) {
+              chat.updateChatAvatar(
+                chatForId.id,
+                userData.avatarUrl || DEFAULT_AVATAR
+              )
+              chat.updateChatStatus(chatForId.id, userData.status || 'offline')
+            }
+          }
+        })
       })
-      setUserAvatars(avatarsById)
-      setUserStatus(statusById)
     } catch (error) {
       console.error(error)
     }
   }
+
+  useEffect(() => {
+    if (chat.chats.length > 0) {
+      showLastMessage()
+      getUserInfo()
+    }
+  }, [chat.chats.length])
 
   async function handleUserSearch(e) {
     const value = e.target.value
@@ -141,16 +186,22 @@ export function useSidebarLogic() {
     try {
       if (value.trim() && value !== user.user.userName) {
         const data = await searchUser(value)
-        setFoundUser(data)
-        userId2Ref.current = data.id
-        setMate(data.userName)
-        setMateAvatar(data.avatarUrl)
+        runInAction(() => {
+          setFoundUser(data)
+          userId2Ref.current = data.id
+          setMate(data.userName)
+          setMateAvatar(data.avatarUrl)
+        })
       } else {
-        setFoundUser(null)
+        runInAction(() => {
+          setFoundUser(null)
+        })
       }
     } catch (error) {
       console.error('Ошибка при поиске пользователя:', error)
-      setFoundUser(null)
+      runInAction(() => {
+        setFoundUser(null)
+      })
     }
   }
 
@@ -159,8 +210,10 @@ export function useSidebarLogic() {
     const startWidth = widthBlock
 
     const handleMouseMove = (moveEvent) => {
-      const newWidth = startWidth + (moveEvent.clientX - startX)
-      setWidthBlock(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth)))
+      runInAction(() => {
+        const newWidth = startWidth + (moveEvent.clientX - startX)
+        setWidthBlock(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth)))
+      })
     }
 
     const handleMouseUp = () => {
@@ -177,6 +230,7 @@ export function useSidebarLogic() {
     const userIdMap = {}
     const time = {}
     const isReads = {}
+
     lastMessage.forEach((msg) => {
       if (!msg) return
       messageText[msg.dialogId] =
@@ -185,15 +239,14 @@ export function useSidebarLogic() {
       time[msg.dialogId] = msg.timestamp
       isReads[msg.dialogId] = msg.isRead
     })
+
     return { messageText, userIdMap, time, isReads }
   }, [lastMessage])
 
   return {
     sidebarRef,
     userId2Ref,
-    userAvatars,
-    chatIds,
-    userStatus,
+    chat,
     runTour,
     userSearch,
     foundUser,
@@ -201,7 +254,6 @@ export function useSidebarLogic() {
     mateAvatar,
     focus,
     widthBlock,
-    lastMessage,
     lastMessageMap,
     setFocus,
     setUserSearch,

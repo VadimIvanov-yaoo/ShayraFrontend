@@ -1,28 +1,39 @@
-import { makeAutoObservable } from 'mobx'
+import { makeAutoObservable, observable, runInAction } from 'mobx'
 
 export default class CurrentChat {
-  constructor() {
-    this._currentChatId = null
-    this._currentChatData = null
-    this._isChatVisible = false
-    this._isSidebarOpen = false
+  _currentChatId = null
+  _currentChatData = null
+  _isChatVisible = false
+  _isSidebarOpen = false
 
-    makeAutoObservable(this)
+  constructor() {
+    makeAutoObservable(this, {
+      _currentChatId: observable,
+      _currentChatData: observable,
+      _isChatVisible: observable,
+      _isSidebarOpen: observable,
+    })
   }
 
   setCurrentChat(chatId, chatData = null) {
-    this._currentChatId = chatId
-    this._currentChatData = chatData
-    this._isChatVisible = true
+    runInAction(() => {
+      this._currentChatId = chatId
+      this._currentChatData = chatData
+      this._isChatVisible = true
+    })
   }
 
   toggleSidebar() {
-    this._isSidebarOpen = !this._isSidebarOpen
-    console.log(this.isSidebarOpen)
+    runInAction(() => {
+      this._isSidebarOpen = !this._isSidebarOpen
+    })
   }
+
   closeChat() {
-    this._isChatVisible = false
-    this._isSidebarOpen = false
+    runInAction(() => {
+      this._isChatVisible = false
+      this._isSidebarOpen = false
+    })
   }
 
   get currentChatId() {
@@ -31,11 +42,9 @@ export default class CurrentChat {
   get currentChatData() {
     return this._currentChatData
   }
-
   get isChatVisible() {
     return this._isChatVisible
   }
-
   get isSidebarOpen() {
     return this._isSidebarOpen
   }

@@ -1,17 +1,50 @@
-import { makeAutoObservable } from 'mobx'
+import { action, makeAutoObservable, observable, runInAction } from 'mobx'
 
 export default class UserStore {
+  _isAuth = false
+  _user = {}
+  _socket = null
+
   constructor() {
-    this._isAuth = false
-    this._user = {}
-    makeAutoObservable(this)
+    makeAutoObservable(this, {
+      _isAuth: observable,
+      _user: observable,
+      setSocket: action,
+      updateUserStatus: action,
+      updateUserAvatar: action,
+    })
+  }
+
+  setSocket(socket) {
+    this._socket = socket
   }
 
   setIsAuth(bool) {
-    this._isAuth = bool
+    runInAction(() => {
+      this._isAuth = bool
+    })
   }
+
   setUser(user) {
-    this._user = user
+    runInAction(() => {
+      this._user = user
+    })
+  }
+
+  updateUserStatus(status) {
+    runInAction(() => {
+      if (this._user) {
+        this._user.status = status
+      }
+    })
+  }
+
+  updateUserAvatar(avatarUrl) {
+    runInAction(() => {
+      if (this._user) {
+        this._user.avatarUrl = avatarUrl
+      }
+    })
   }
 
   get isAuth() {

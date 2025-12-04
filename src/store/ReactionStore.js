@@ -1,12 +1,17 @@
-import { makeAutoObservable, reaction } from 'mobx'
+import { makeAutoObservable, observable, runInAction } from 'mobx'
 
 export default class ReactionMessageStore {
+  _reaction = {}
+
   constructor() {
-    this._reaction = {}
-    makeAutoObservable(this)
+    makeAutoObservable(this, {
+      _reaction: observable,
+    })
   }
 
   setReaction(reaction) {
-    this._reaction = reaction
+    runInAction(() => {
+      this._reaction = reaction
+    })
   }
 }
